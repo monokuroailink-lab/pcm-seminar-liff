@@ -28,7 +28,7 @@
       overflow-y: scroll;
       z-index: 9999;
       /* ★本番リリース時は display: none にする */
-      display: block;
+      display: none;
     }
 
     .card {
@@ -105,10 +105,20 @@
     const ENTRY_SEMINAR = 'entry.100643207';
     const ENTRY_USER = 'entry.1734163930';
 
+    // Check URL parameter for ?debug=true
+    const urlParams = new URLSearchParams(window.location.search);
+    const IS_DEBUG = urlParams.get('debug') === 'true';
+
+    if (IS_DEBUG) {
+      document.getElementById('debug').style.display = 'block';
+    }
+
     function log(msg) {
       console.log(msg);
-      const d = document.getElementById('debug');
-      if (d) d.innerHTML += '\n[' + new Date().toLocaleTimeString() + '] ' + msg;
+      if (IS_DEBUG) {
+        const d = document.getElementById('debug');
+        if (d) d.innerHTML += '\n[' + new Date().toLocaleTimeString() + '] ' + msg;
+      }
     }
 
     function withTimeout(promise, ms) {
