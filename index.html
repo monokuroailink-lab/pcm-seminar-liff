@@ -6,13 +6,98 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>セミナー一覧</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: #f4f4f4;
+      font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #b6dcff;
+      /* Slightly darker pale blue */
+      background-image: linear-gradient(180deg, #e6f3ff 0%, #ffffff 100%);
+      background-attachment: fixed;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       color: #333;
+    }
+
+    /* Header Section */
+    header {
+      background: rgba(255, 255, 255, 0.85);
+      /* Glassmorphism Base */
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 16px 20px;
+      text-align: center;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+      margin-bottom: 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      color: #2c3e50;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    /* PCM Dots */
+    .pcm-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* PCM 6 Colors */
+    .Thinker {
+      background-color: #1a73e8;
+    }
+
+    /* Blue */
+    .Persister {
+      background-color: #9c27b0;
+    }
+
+    /* Purple */
+    .Promoter {
+      background-color: #f44336;
+    }
+
+    /* Red */
+    .Harmonizer {
+      background-color: #ff9800;
+    }
+
+    /* Orange */
+    .Imaginer {
+      background-color: #795548;
+    }
+
+    /* Brown */
+    .Rebel {
+      background-color: #fdd835;
+    }
+
+    /* Yellow */
+
+    /* Container */
+    #app {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 16px 40px 16px;
     }
 
     #debug {
@@ -27,59 +112,160 @@
       height: 180px;
       overflow-y: scroll;
       z-index: 9999;
-      /* ★本番リリース時は display: none にする */
       display: none;
     }
 
+    /* Card Design */
     .card {
       background: white;
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 16px;
+      padding: 24px;
       margin-bottom: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.02);
+    }
+
+    .card:active {
+      transform: scale(0.99);
+    }
+
+    /* Status Badge */
+    .status-badge {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    }
+
+    .status-open {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-full {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+
+    .status-wait {
+      background-color: #f5f5f5;
+      color: #616161;
+    }
+
+    /* Date & Title */
+    .date {
+      color: #1a73e8;
+      /* Accent Color */
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+    }
+
+    .date::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background-color: #1a73e8;
+      border-radius: 50%;
+      margin-right: 8px;
     }
 
     .card h2 {
-      font-size: 18px;
-      margin-top: 0;
-      color: #2c3e50;
+      font-size: 19px;
+      margin: 0 0 16px 0;
+      color: #1a1a1a;
+      line-height: 1.4;
     }
 
-    .date {
-      color: #e67e22;
+    /* Info Grid */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 8px 0;
+      font-size: 13.5px;
+      color: #5f6368;
+      margin-bottom: 16px;
+    }
+
+    .info-label {
       font-weight: bold;
-      margin-bottom: 10px;
+      color: #9aa0a6;
     }
 
-    .info {
-      font-size: 14px;
+    .comment-box {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      color: #5f6368;
+      margin-bottom: 16px;
       line-height: 1.5;
-      color: #666;
     }
 
+    /* Price Section */
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fcfcfc;
+      border: 1px solid #f1f3f4;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+    }
+
+    .price-item {
+      display: flex;
+      flex-direction: column;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .price-val {
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+      margin-top: 2px;
+    }
+
+    /* Button */
     .btn {
       display: block;
       width: 100%;
       text-align: center;
-      background-color: #06c755;
+      background: linear-gradient(135deg, #06c755 0%, #05b34c 100%);
       color: white;
-      padding: 12px 0;
-      border-radius: 8px;
+      padding: 14px 0;
+      border-radius: 50px;
+      /* Pillow shape for modern look */
       text-decoration: none;
       font-weight: bold;
-      margin-top: 15px;
-      cursor: pointer;
       border: none;
-      font-size: 16px;
+      font-size: 15px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(6, 199, 85, 0.3);
+      transition: box-shadow 0.2s;
+    }
+
+    .btn:hover {
+      box-shadow: 0 6px 16px rgba(6, 199, 85, 0.4);
     }
 
     .btn.disabled {
-      background-color: #ccc;
+      background: #e0e0e0;
+      color: #9e9e9e;
       cursor: not-allowed;
-    }
-
-    .btn:active {
-      background-color: #05b34c;
+      box-shadow: none;
     }
 
     .loading {
@@ -90,6 +276,21 @@
 </head>
 
 <body>
+
+  <header>
+    <div class="pcm-dots">
+      <span class="dot Thinker"></span>
+      <span class="dot Persister"></span>
+      <span style="font-size: 14px; line-height: 10px;">❤️</span>
+    </div>
+    <h1>武岡伸幸PCMセミナー</h1>
+    <div class="pcm-dots">
+      <span class="dot Harmonizer"></span>
+      <span class="dot Imaginer"></span>
+      <span class="dot Rebel"></span>
+    </div>
+  </header>
+
   <div id="app">
     <div class="loading">読み込み中...</div>
   </div>
@@ -212,7 +413,7 @@
     function renderList(seminars, userId) {
       const app = document.getElementById('app');
       if (!seminars || seminars.length === 0) {
-        app.innerHTML = '<p>現在募集中のセミナーはありません。</p>';
+        app.innerHTML = '<p style="text-align:center;">現在募集中のセミナーはありません。</p>';
         return;
       }
 
@@ -222,26 +423,50 @@
           '?' + ENTRY_SEMINAR + '=' + encodeURIComponent(s.pid) +
           '&' + ENTRY_USER + '=' + encodeURIComponent(userId);
 
+        // Status Badge Logic
+        let badgeClass = 'status-wait';
+        if (s.status === '募集中') badgeClass = 'status-open';
+        if (s.status === '満席') badgeClass = 'status-full';
+
+        // Button Logic
         let btnHtml = '';
         if (s.status === '募集中') {
-          btnHtml = '<button class="btn" onclick="window.location.href=\'' + applyUrl + '\'">申し込む</button>';
+          btnHtml = `<button class="btn" onclick="window.location.href='${applyUrl}'">申し込む</button>`;
         } else if (s.status === '満席') {
-          btnHtml = '<button class="btn disabled" disabled>満席</button>';
+          btnHtml = `<button class="btn disabled" disabled>満席</button>`;
         } else if (s.status === '申込前') {
-          btnHtml = '<button class="btn disabled" disabled>申込開始前</button>';
+          btnHtml = `<button class="btn disabled" disabled>申込開始前</button>`;
         }
 
-        html += '<div class="card">' +
-          '<div class="date">' + esc(s.date) + ' <span style="font-size:0.8em;color:#666;">(' + esc(s.status) + ')</span></div>' +
-          '<h2>' + esc(s.name) + '</h2>' +
-          '<div class="info">' +
-          '場所: ' + esc(s.venue) + '<br>' +
-          '時間: ' + esc(s.time) + '<br>' +
-          '費用: 初受講 ¥' + Number(s.fee_new).toLocaleString() + ' / 再受講 ¥' + Number(s.fee_repeat).toLocaleString() + '<br>' +
-          (s.comment ? '<span style="font-size:0.9em;color:#888;">' + esc(s.comment) + '</span>' : '') +
-          '</div>' +
-          btnHtml +
-          '</div>';
+        html += `
+            <div class="card">
+              <div class="status-badge ${badgeClass}">${esc(s.status)}</div>
+              <div class="date">${esc(s.date)}</div>
+              <h2>${esc(s.name)}</h2>
+              
+              <div class="info-grid">
+                <div class="info-label">場所</div>
+                <div>${esc(s.venue)}</div>
+                <div class="info-label">時間</div>
+                <div>${esc(s.time)}</div>
+              </div>
+
+              ${s.comment ? `<div class="comment-box">💡 ${esc(s.comment)}</div>` : ''}
+              
+              <div class="price-row">
+                 <div class="price-item">
+                   <span>初受講</span>
+                   <span class="price-val">¥${Number(s.fee_new).toLocaleString()}</span>
+                 </div>
+                 <div class="price-item" style="text-align:right;">
+                   <span>再受講</span>
+                   <span class="price-val">¥${Number(s.fee_repeat).toLocaleString()}</span>
+                 </div>
+              </div>
+
+              ${btnHtml}
+            </div>
+          `;
       });
       app.innerHTML = html;
     }
