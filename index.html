@@ -1,0 +1,1259 @@
+
+システムの検証をたのみたい
+下記のようなシステム
+次にコードを貼るが先に質問があれば質問してほしい
+
+# PCM Seminar Auto Reply System
+
+PCMセミナー（Key To Meセミナー等）の申し込み・管理を自動化し、受講生ごとにパーソナライズされた体験を提供するシステム。
+「管理エリア」「中継エリア」「体験エリア」の3層構造で、事務局の工数削減と受講生の利便性を両立する。
+
+## 概要
+
+- **目的**: 
+    - 年間12回以上のセミナー開催におけるフォーム作成・管理工数の削減。
+    - LINE公式アカウント内でのスムーズな日程選択・申し込みフローの実現。
+    - 振込期限やZoomリンクなど、セミナーごとに異なる情報の自動案内。
+
+## システム構造 (3つのエリア)
+
+1. **管理エリア（司令塔）**: Google Spreadsheet
+    - 全日程、定員、締切日、会場情報を一元管理。
+    - 管理項目: 日時, 支払/PPI締切, 会場(住所/Maps), 受講料設定(新規/再受講/懇親会)
+2. **中継エリア（脳・橋渡し）**: GAS + LINE LIFF
+    - LINE上で「現在募集中」のセミナー一覧（カルーセル等）を動的に表示。
+    - ユーザー識別子 (UserID) を裏側で取得。
+3. **体験エリア（出口）**: 統合Googleフォーム + 自動返信
+    - 全日程共通のフォーム（UserID・セミナー名は自動入力）。
+    - 申し込み完了後、LINEとメールで即座に詳細案内を送信。
+
+## フォルダ構成
+
+- `docs/`: 設計図、アーキテクチャ概要
+- `src/`: Google Apps Script (GAS) ソースコード
+- `references/`: 参考資料
+
+## 今後のステップ
+
+1. マスターシートのカラム設計
+2. LINEメッセージ（カルーセル）のデザイン構成
+3. 統合フォームの実装
+もっと表示
+9:25
+
+システム検証前に確認事項を整理した。
+
+
+システムの概要、理解しました。コードを貼っていただく前に、検証の方向性を合わせるためにいくつか確認させてください。
+
+検証の範囲について
+
+「検証」のゴールは何ですか？
+コードのバグや不具合の発見？
+セキュリティ面のチェック？
+設計・アーキテクチャの妥当性レビュー？
+それとも全般的なコードレビュー？
+現在の開発ステータスは？
+すでに動いていて問題が起きている（デバッグ寄り）？
+一通り書き終わって、リリース前のレビュー？
+まだ開発途中で、方向性の確認？
+技術的な確認
+
+LINE LIFF のバージョンと、LINEの Messaging API / webhook の利用有無を教えてもらえると、API周りの検証がしやすくなります。
+GASのデプロイ形態はウェブアプリとしてデプロイ（doGet / doPost）ですか？
+コードの量はどのくらいありますか？ファイルが複数ある場合、貼る順序や優先度を相談できればと思います。
+上記のうち、すぐ答えられるものだけで構いません。コードを先に貼っていただいても大丈夫です。その場合は上記の観点を総合的に見ていきます。
+
+
+/** * PCM Seminar Auto Reply System v2 * * @fileoverview 回答スプレッドシートに紐付くメイン制御ロジック * - フォーム送信時: 申込完了メール/LINE * - 入金確認時 (手動): PPI案内メール/LINE * - リマインド (自動): 開催3日前にメール/LINE */ // ========================================== // 設定エリア (CONFIG) // =======================================
+
+pasted
+
+
+<!DOCTYPE html> <html> <head> <base target="_top"> <meta charset="utf-8"> <title>セミナー一覧</title> <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script> <style> body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+
+pasted
+
+昨日作ったとこなのでうごかない。バグの発見
+開発途中
+
+LIFFのverは不明やけど昨日作ったので最新？
+GASはウェブアプリでデプロイ
+
+9:27
+
+コード構造を精査し、複数の致命的バグを特定した。
+55s
+
+
+
+
+
+
+コードを一通り読みました。かなりの数の問題が見つかったので、重大度別に整理します。
+
+🔴 Critical（実行時エラー・動かない原因）
+1. isSameDate() が未定義
+dailyReminder() 内で呼ばれていますが、関数がどこにも定義されていません。実行すると即 ReferenceError でクラッシュします。
+
+javascript
+// L167: 呼び出しているが、定義がない
+return isSameDate(s.date, targetDate);
+2. onEdit / onFormSubmit の権限問題
+これが最大の落とし穴です。GASの「シンプルトリガー」（関数名が onEdit / onFormSubmit のもの）は権限が制限されており、以下がすべて失敗します。
+
+SpreadsheetApp.openById() → 別スプレッドシートへのアクセス不可
+GmailApp.sendEmail() → メール送信不可
+UrlFetchApp.fetch() → LINE API呼び出し不可
+PropertiesService.getScriptProperties() → トークン取得不可
+対策: インストーラブルトリガーとして登録し、関数名を変える必要があります。
+
+javascript
+// NG: シンプルトリガー名
+function onFormSubmit(e) { ... }
+function onEdit(e) { ... }
+
+// OK: 別名にしてトリガーを手動登録
+function handleFormSubmit(e) { ... }
+function handleEdit(e) { ... }
+// → GASエディタ > トリガー > 「handleFormSubmit」を「フォーム送信時」に設定
+// → GASエディタ > トリガー > 「handleEdit」を「編集時」に設定
+3. dailyReminder のオブジェクト形状不一致
+getActiveSeminars() が返すオブジェクトと sendEmail() が期待するオブジェクトのプロパティ名がまったく異なります。
+
+javascript
+// getActiveSeminars() が返すもの
+{ pid, name, date, time, venue, comment, fee_new, deadline, status }
+
+// sendEmail() が参照するもの
+info.venueName    // ← undefined (getActiveSeminarsは "venue")
+info.venueAddress // ← undefined (存在しない)
+info.mapUrl       // ← undefined (存在しない)
+info.paymentDeadline // ← undefined
+info.ppiDeadline     // ← undefined
+sendEmail 内で undefined.replace() 的なエラーか、メール本文が undefined だらけになります。dailyReminder では getSeminarInfoById(sId) を使うべきです。
+
+4. google.script.run で Date オブジェクトが壊れる
+getActiveSeminars() の戻り値に含まれる fee_new や deadline について、スプレッドシートの Date 型はクライアントに渡せるように formatDate() している箇所もありますが、fee_new は数値として正しく渡るか確認が必要です。また date フィールドが Date_Display カラムから来ていますが、これが Date 型だった場合シリアライズに失敗します。
+
+🟠 High（ロジックエラー・データ不整合）
+5. calculateAmount のハードコード
+マスタに Fee_New, Fee_Repeat, Fee_Party があるのに、懇親会付きの金額が固定値になっています。
+
+javascript
+// 現状: 料金が変わったらコード修正が必要
+if (type.includes('初受講')) {
+    return type.includes('懇親会') ? 33000 : info.feeNew;  // 33000がハードコード
+}
+javascript
+// 修正案: マスタの値を使う
+if (type.includes('初受講')) {
+    return type.includes('懇親会') ? info.feeNew + info.feeParty : info.feeNew;
+}
+6. sendEmail の var スコープ問題
+if / else if ブロック内で var body = ... を宣言していますが、var は関数スコープなのでどのブロックに入っても最後に宣言された body が有効です。動きはしますが、どのテンプレートにもマッチしなかった場合 body は undefined となり、後続の .replace() でクラッシュします。
+
+javascript
+// 修正案
+let subject = '';
+let body = '';
+
+if (templateKey === 'application_ack') {
+    subject = `...`;
+    body = getTemplateContent('mail_application_ack');
+} else if (...) {
+    ...
+}
+
+if (!body) {
+    console.error('Unknown template: ' + templateKey);
+    return;
+}
+7. dailyReminder のフィルタ条件
+getActiveSeminars() は Status === '募集中' || '申込前' || '満席' だけを返します。しかし3日後のセミナーはすでに「締切済」や別のステータスに変わっている可能性があり、リマインド対象から漏れます。
+
+8. formatDate のタイムゾーン指定
+javascript
+// 現状: 動くが非推奨
+Utilities.formatDate(d, 'JST', 'yyyy/MM/dd');
+
+// 推奨: IANA形式
+Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+🟡 Medium（セキュリティ・保守性）
+9. HTML での XSS 脆弱性
+s.comment, s.name 等をエスケープなしで innerHTML に直接挿入しています。マスタシートに <script>alert(1)</script> のような値が入ると実行されます。自社管理データとはいえ危険です。
+
+javascript
+// 修正案: エスケープ関数を追加
+function esc(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+// 使用時
+html += `<h2>${esc(s.name)}</h2>`;
+10. デバッグパネルが本番で表示される
+#debug が display: block で常時表示。ユーザーに緑文字のログが見えてしまいます。
+
+css
+/* 本番では非表示に */
+#debug { display: none; }
+11. フォーム質問名への依存
+answers['メールアドレス'], answers['お名前'] のように日本語の質問タイトルで値を取得しています。フォームの質問文を少しでも変更するとコードが壊れます。ヘッダー名をCONFIGに定数化するか、列インデックスで管理する方が安全です。
+
+12. onEdit の e.value がない場合
+チェックボックスの一括操作やペースト時には e.value が undefined になることがあります。
+
+javascript
+// 修正案
+const value = range.getValue(); // e.value の代わりに直接取得
+まとめ: 優先修正リスト
+優先度	項目	影響
+🔴	トリガーをインストーラブルに変更	メール・LINE全滅
+🔴	isSameDate() を実装	リマインド全滅
+🔴	dailyReminder でオブジェクト形状を統一	リマインドメール破損
+🟠	calculateAmount のハードコード除去	料金誤り
+🟠	sendEmail の var → let + ガード	未知テンプレートでクラッシュ
+🟠	リマインド対象のステータス条件見直し	送信漏れ
+🟡	XSS対策・デバッグパネル非表示	セキュリティ
+修正コードが必要な箇所があれば指定してください。個別に書き起こせます。
+
+
+/** * PCM Seminar Auto Reply System v2 */ // ========================================== // CONFIG // ========================================== const CONFIG = { MASTER_SHEET_ID: '1Br3QD9KGm_Ws499Tu2Nn5PpEWrS0Twmpv8RnD5kSxTo', // Adjust if needed MASTER_SHEET_NAME: 'Master',
+
+pasted
+
+
+<!DOCTYPE html> <html> <head> <base target="_top"> <meta charset="utf-8"> <title>セミナー一覧</title> <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script> <style> body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+
+pasted
+
+下記コードにしたがうごかない
+
+indexが表示されない
+
+ウェブアプリとしてデプロイしています。
+URLをエンドポイントとしてLIFFに渡している
+
+9:50
+
+LIFF表示問題の原因を多角的に診断した。
+57s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+v2コード、前回の指摘をかなり反映していますね。「indexが表示されない」問題に絞って原因を特定し、残りのバグも洗い出します。
+
+🔴 表示されない原因（ほぼ確実）
+1. setXFrameOptionsMode が未設定（最有力）
+GAS の HtmlService はデフォルトで X-Frame-Options: SAMEORIGIN を返します。LIFF（Compact/Tall）は LINE アプリ内の WebView でページを開くため、別オリジンとして拒否されます。
+
+javascript
+// 現状
+function doGet(e) {
+    const template = HtmlService.createTemplateFromFile('index');
+    template.liffId = getScriptProperty('LIFF_ID');
+    return template
+        .evaluate()
+        .setTitle('PCM セミナー一覧')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    // ← ここで終わっている。iframe許可がない
+}
+
+// 修正
+function doGet(e) {
+    const template = HtmlService.createTemplateFromFile('index');
+    template.liffId = getScriptProperty('LIFF_ID');
+    return template
+        .evaluate()
+        .setTitle('PCM セミナー一覧')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // ★追加
+}
+```
+
+**これだけで表示される可能性が高いです。**
+
+### 2. デプロイ設定の確認
+
+GASエディタ → デプロイ → デプロイを管理 で以下を確認してください。
+
+| 項目 | 必要な設定 |
+|------|-----------|
+| 実行するユーザー | **自分（オーナー）** |
+| アクセスできるユーザー | **全員**（Googleアカウント不要） |
+| デプロイURL | `/exec` で終わるもの（`/dev` はNG） |
+
+**コード修正後は「新しいデプロイ」か「デプロイを編集」で再デプロイが必須**です。`/dev` URLはキャッシュが残る上に権限が異なります。
+
+### 3. LIFF_ID がスクリプトプロパティに未設定
+
+`getScriptProperty('LIFF_ID')` が `null` を返すと、テンプレートの `<?= liffId ?>` が文字列 `"null"` になり、`liff.init({ liffId: "null" })` が即エラーになります。
+
+**確認方法**: GASエディタ → プロジェクトの設定 → スクリプトプロパティに以下があるか確認。
+
+| プロパティ | 値 |
+|-----------|---|
+| `LIFF_ID` | LINE Developers で取得した LIFF ID（例: `1234567890-xxxxxxxx`） |
+| `LINE_ACCESS_TOKEN` | チャネルアクセストークン（長期） |
+
+---
+
+## 🔴 表示後に動かないバグ
+
+### 4. テンプレートのプレースホルダ不一致
+
+`sendEmail` に渡す `templateData` のキーと、テンプレート内の `{{...}}` が一致していません。**メールが壊れます。**
+```
+// handleFormSubmit が渡すデータ
+{ Venue: "会場名", ... }
+
+// テンプレートが期待するもの
+会場: {{VenueName}}    ← "Venue" ≠ "VenueName" → 置換されない
+日時: {{Date}} {{Time}} ← Time がtemplateDataにない → "{{Time}}" がそのまま残る
+修正案（2択のどちらか）:
+
+A) templateData 側を合わせる:
+
+javascript
+// handleFormSubmit 内
+const templateData = {
+    Name: userName,
+    SeminarName: seminarInfo.seminarName,
+    Amount: amount.toLocaleString(),
+    PaymentDeadline: formatDate(seminarInfo.paymentDeadline),
+    VenueName: seminarInfo.venueName,   // ★ Venue → VenueName
+    Time: seminarInfo.time,             // ★ 追加
+    Date: seminarInfo.dateDisplay,
+    Comment: seminarInfo.comment || ''
+};
+```
+
+B) テンプレート側を合わせる:
+```
+会場: {{Venue}}
+全テンプレート×全呼び出し箇所の対応表:
+
+テンプレート	必要なキー	application_ack	ppi_invite	final_reminder
+{{Name}}	✅	✅	✅	
+{{SeminarName}}	✅	✅	✅	
+{{Date}}	✅	-	✅	
+{{Time}}	❌ 欠落	-	✅	
+{{VenueName}}	❌ Venue で渡している	-	❌ 同上	
+{{Amount}}	✅	-	-	
+{{PaymentDeadline}}	✅	-	-	
+{{PPIDeadline}}	-	✅	-	
+{{VenueAddress}}	-	-	✅	
+{{MapURL}}	-	-	✅	
+{{Comment}}	✅	✅	✅	
+5. handleEdit のハードコード列番号
+javascript
+const userEmail = sheet.getRange(row, 2).getValue();   // B列がメール？
+const userName = sheet.getRange(row, 3).getValue();     // C列が名前？
+const seminarId = sheet.getRange(row, 15).getValue();   // O列がSeminarID？
+const userId = sheet.getRange(row, 16).getValue();      // P列がUserID？
+Googleフォーム連携シートの列順はフォームの質問追加順で決まり、途中で質問を追加/削除すると列がズレます。実際のシートのヘッダーと照合が必要です。
+
+安全な修正案: ヘッダー行から動的にマッピング。
+
+javascript
+function handleEdit(e) {
+    const sheet = e.source.getActiveSheet();
+    if (sheet.getName() !== CONFIG.RESPONSE_SHEET_NAME) return;
+
+    const range = e.range;
+    const col = range.getColumn();
+    const row = range.getRow();
+    const val = range.getValue();
+
+    if (col === CONFIG.COL_PAYMENT_CHECK && val === true && row > 1) {
+        // ヘッダーからマッピング
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        const colMap = {};
+        headers.forEach((h, i) => colMap[h] = i + 1); // 1-indexed for getRange
+
+        const ppiSent = sheet.getRange(row, CONFIG.COL_PPI_SENT).getValue();
+        if (ppiSent) return;
+
+        const userEmail = sheet.getRange(row, colMap['メールアドレス']).getValue();
+        const userName = sheet.getRange(row, colMap['お名前']).getValue();
+        const seminarId = sheet.getRange(row, colMap['SeminarID']).getValue();
+        const userId = sheet.getRange(row, colMap['UserID']).getValue();
+        // ... 以下同じ
+    }
+}
+6. dailyReminder も同じハードコード問題
+javascript
+const rowSeminarId = data[i][14]; // O列 ← 本当にO列？
+const remindSent = data[i][19];   // T列 ← CONFIG.COL_REMIND_SENT - 1 = 19 は合っている
+const userEmail = data[i][1];     // B列
+const userName = data[i][2];      // C列
+const userId = data[i][15];       // P列
+これもヘッダー行マッピングに変更すべきです。
+
+🟡 その他（前回から未修正）
+7. XSS（index.html）
+s.comment, s.name 等が未エスケープのまま innerHTML へ注入されています。
+
+8. デバッグパネル
+#debug が display: block のまま。本番では非表示にすべきです。
+
+まとめ: やることリスト
+優先	修正内容	効果
+🔴1	doGet に .setXFrameOptionsMode(ALLOWALL) 追加	ページが表示される
+🔴2	デプロイ設定確認（実行者=自分、アクセス=全員、/exec URL）	ページが表示される
+🔴3	LIFF_ID / LINE_ACCESS_TOKEN がスクリプトプロパティにあるか確認	LIFF初期化が動く
+🔴4	テンプレートのプレースホルダ名を統一	メールが正しく送られる
+🟠5	handleEdit / dailyReminder の列番号をヘッダーマッピングに変更	入金確認・リマインドが壊れない
+🟡6	デバッグパネル非表示、XSSエスケープ	セキュリティ・UX
+まず 🔴1〜3 をやって再デプロイすれば、画面は表示されるはずです。修正版コード一式が必要であれば書き起こします。
+
+一旦４５６の問題はテスト実装なので無視します。セキュリティ関係も。動いたら改めてレビューたのみます
+
+10:15
+
+Prioritized initial features while deferring security review.
+
+
+了解です。まず**「LIFFで index.html が表示される」**ところまで持っていきましょう。
+
+やることは3つだけです。
+
+① コード修正（1箇所だけ）
+doGet に1行追加して再デプロイしてください。
+
+javascript
+function doGet(e) {
+    const template = HtmlService.createTemplateFromFile('index');
+    template.liffId = getScriptProperty('LIFF_ID');
+    return template
+        .evaluate()
+        .setTitle('PCM セミナー一覧')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL); // ★これだけ追加
+}
+② デプロイ設定の確認
+GASエディタ → 「デプロイ」→「デプロイを管理」で以下3点を確認してください。
+
+実行するユーザー → 「自分」
+アクセスできるユーザー → 「全員」
+URL → /exec で終わっているもの（/dev はダメ）
+コード修正後は**「デプロイを編集」でバージョンを「新しいバージョン」に変更して保存**、もしくは新規デプロイしてください。これをやらないと旧コードのままです。
+
+③ スクリプトプロパティの確認
+GASエディタ → 左の歯車「プロジェクトの設定」→ 一番下「スクリプトプロパティ」に以下が登録されているか確認してください。
+
+キー	値の例
+LIFF_ID	2006xxxxxx-xxxxxxxx
+LINE_ACCESS_TOKEN	チャネルアクセストークン
+LIFF_ID が未設定だと liff.init() が即死します。
+
+この3つをやったら、LIFFのURLをLINEで開いてみてください。「読み込み中...」かログインボタンが出れば成功です。結果を教えてもらえれば次に進めます。
+
+1769908697585_image.png
+1769908836224_image.png
+1769908862240_image.png
+
+/** * PCM Seminar Auto Reply System v2 */ // ========================================== // CONFIG // ========================================== const CONFIG = { MASTER_SHEET_ID: '1Br3QD9KGm_Ws499Tu2Nn5PpEWrS0Twmpv8RnD5kSxTo', // Adjust if needed MASTER_SHEET_NAME: 'Master',
+
+pasted
+
+③はOK②もOK
+スクリプト制作アカウントだとエラー発生表記
+違うアカウントだとつながらない
+
+10:21
+
+診断した3つの問題と解決策を検討した。
+50s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+進捗あり！ページ自体は表示されるようになりましたね。問題を2つに分けて見ます。
+
+問題A: 「Failed to fetch」（スクリプトオーナー）
+デバッグログから liff.init() の段階で失敗しています。
+
+確認①: どのURLで開いていますか？
+
+開き方	URL	動くか
+❌ GAS URLを直接	https://script.google.com/macros/s/xxxxx/exec	LIFF動かない
+✅ LIFF URLから	https://liff.line.me/2009018264-Dw2kv4L9	これが正解
+GAS URLを直接ブラウザで開いても LIFF SDK はLINEのコンテキストが無いので Failed to fetch になります。
+
+確認②: LINE Developers Console の設定
+
+LINE Developers → LIFF タブで以下を確認してください。
+
+Endpoint URL → GASの /exec URL（https://script.google.com/macros/s/xxxxx/exec）が入っているか
+Scope → profile にチェックが入っているか（getProfile() に必要）
+サイズ → Full 推奨（Compact だと動作が不安定な場合あり）
+確認③: LINE アプリから開く
+
+LINEのトーク画面に https://liff.line.me/2009018264-Dw2kv4L9 を貼って、LINEアプリ内でタップして開いてください。PCのブラウザではなくスマホのLINEアプリが確実です。
+
+問題B: 別アカウントで「ファイルを開くことができません」
+3枚目の画像はGoogleドライブのエラーページです。これは2つの原因が考えられます。
+
+原因1: /dev URLを共有している
+
+URL末尾	アクセス権
+/dev	オーナーのみ（他人は絶対開けない）
+/exec	デプロイ設定に依存
+別アカウントに共有するURLは必ず /exec で終わるものを使ってください。
+
+原因2: デプロイ時の「アクセスできるユーザー」設定
+
+GASエディタ → デプロイ → デプロイを管理 で確認して、以下の通りになっているか見てください。
+
+「次のユーザーとして実行」→ 自分
+「アクセスできるユーザー」→ 全員
+「全員（Googleアカウント不要）」でないと、LINEアプリ内のブラウザ（Googleにログインしていない状態）からアクセスできません。
+
+まとめ：今やること
+LINE Developers Console で Endpoint URL が GASの /exec URL になっているか確認
+LIFF の Scope に profile が入っているか確認
+LINEアプリ内で https://liff.line.me/2009018264-Dw2kv4L9 を開いてテスト
+デプロイの「アクセスできるユーザー」を全員に変更して再デプロイ
+3のテスト結果を教えてください。デバッグログの内容がもう少し進めば次の原因が特定できます。
+
+1769909026134_image.png
+https://liff.line.me/2009018264-Dw2kv4L9
+でひらいてる
+LIFFが開発中ステータスやから？
+SP側からは読み込み中...と表記されて出ない
+
+10:23
+
+LINEログイン設定のコールバックURL確認を優先すべき
+1m、15s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+設定はほぼ正しいです。画面が出ない原因を絞り込みましょう。
+
+最有力原因: LINEログインの「コールバックURL」未設定
+LINE Developers Console で 「LINEログイン設定」タブ を開いてください（LIFFタブの左隣）。
+
+「コールバックURL」に 何も入っていない、もしくはGASのURLが入っていないと、LIFF SDKの認証フローが失敗して Failed to fetch になります。
+
+設定すべき値:
+
+https://script.google.com
+これを入力して保存してください。
+
+確認してほしいこと（2点）
+① LINEログイン設定タブのスクリーンショットを見せてください（コールバックURLの欄）
+
+② スマホLINEで開いた時、画面の一番下に緑色のデバッグログが出ていますか？
+
+出ていれば、そこに書かれている内容を教えてください。「読み込み中...」で止まっている場合、ログの最後の行が原因特定の鍵になります。
+
+Starting main... すら出ていない → LIFF SDKの読み込み自体が失敗
+LIFF init success まで出ている → getActiveSeminars() の問題
+Error: Failed to fetch → コールバックURL未設定がほぼ確定
+「開発中」ステータスについて
+開発中でもチャネルの管理者・テスターは使えるので、今の段階では問題ありません。本番公開時に「公開済み」に切り替えれば大丈夫です。
+
+image
+この状態です
+
+10:29
+
+LIFF初期化がハングしている原因を診断した。
+32s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+進展しています！ログから状況が明確になりました。
+
+liff.init() の呼び出しで止まっている（resolve も reject もしていない）状態です。
+
+原因: GAS のドメイン不一致
+GAS のウェブアプリは以下のように動作します。
+
+アクセス: script.google.com/macros/s/.../exec
+    ↓ 内部リダイレクト
+実際の表示: *.googleusercontent.com （iframe内）
+LIFF SDK は「今いるページのドメイン」と「Endpoint URLのドメイン」を比較するため、googleusercontent.com ≠ script.google.com で初期化が黙って停止します。
+
+修正方法: デバッグ強化 + init オプション追加
+まず原因を確定させるため、index.html を以下に差し替えてください。
+
+html
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>セミナー一覧</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0; padding: 20px; color: #333;
+    }
+    #debug {
+      background: rgba(0,0,0,0.85); color: #0f0; font-size: 11px;
+      padding: 10px; position: fixed; bottom: 0; left: 0;
+      width: 100%; height: 180px; overflow-y: scroll; z-index: 9999;
+    }
+    .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h2 { font-size: 18px; margin-top: 0; color: #2c3e50; }
+    .date { color: #e67e22; font-weight: bold; margin-bottom: 10px; }
+    .info { font-size: 14px; line-height: 1.5; color: #666; }
+    .btn { display: block; width: 100%; text-align: center; background-color: #06c755; color: white; padding: 12px 0; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 15px; cursor: pointer; border: none; font-size: 16px; }
+    .btn.disabled { background-color: #ccc; cursor: not-allowed; }
+    .loading { text-align: center; margin-top: 50px; }
+  </style>
+</head>
+<body>
+  <div id="app"><div class="loading">読み込み中...</div></div>
+  <div id="debug">Debug Log:</div>
+
+  <script>
+    const FORM_BASE_URL = '<?= FORM_BASE_URL || "https://docs.google.com/forms/d/e/1FAIpQLSdvMlF-nnf3qgebUwI4JrcnKddfQgyww16uT2qmM9MxgOb4sg/viewform" ?>';
+    const ENTRY_SEMINAR = 'entry.100643207';
+    const ENTRY_USER = 'entry.1734163930';
+
+    function log(msg) {
+      console.log(msg);
+      const d = document.getElementById('debug');
+      if (d) d.innerHTML += '\n[' + new Date().toLocaleTimeString() + '] ' + msg;
+    }
+
+    // タイムアウト付き Promise
+    function withTimeout(promise, ms) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT after ' + ms + 'ms')), ms))
+      ]);
+    }
+
+    async function main() {
+      try {
+        log('=== main start ===');
+        log('URL: ' + window.location.href);
+        log('Origin: ' + window.location.origin);
+
+        const liffId = "<?= liffId ?>";
+        log('LIFF ID: ' + liffId);
+
+        if (!liffId || liffId === 'null' || liffId === 'undefined') {
+          log('ERROR: LIFF_ID is not set in Script Properties!');
+          document.getElementById('app').innerHTML = '<p>設定エラー: LIFF_IDが未設定です</p>';
+          return;
+        }
+
+        // ★ liff.init に 10秒タイムアウトを設定
+        log('Calling liff.init (10s timeout)...');
+        await withTimeout(liff.init({ liffId: liffId }), 10000);
+        log('liff.init SUCCESS');
+
+        log('isLoggedIn: ' + liff.isLoggedIn());
+        log('isInClient: ' + liff.isInClient());
+        log('OS: ' + liff.getOS());
+
+        if (!liff.isLoggedIn()) {
+          log('Not logged in - showing login button');
+          document.getElementById('app').innerHTML = `
+            <div style="text-align:center; padding:20px;">
+              <p>LINEログインが必要です</p>
+              <button class="btn" onclick="liff.login()">LINEでログイン</button>
+            </div>
+          `;
+          return;
+        }
+
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
+        log('UserID: ' + userId);
+        log('DisplayName: ' + profile.displayName);
+
+        loadSeminars(userId);
+
+      } catch (err) {
+        log('ERROR: ' + err.message);
+        log('Type: ' + err.name);
+        if (err.message.includes('TIMEOUT')) {
+          log('>>> liff.init がタイムアウトしました。GASドメイン問題の可能性大');
+          document.getElementById('app').innerHTML = `
+            <p>LIFF初期化がタイムアウトしました。</p>
+            <p style="font-size:12px;color:#999;">Origin: ${window.location.origin}</p>
+          `;
+        } else {
+          document.getElementById('app').innerHTML = '<p>エラー: ' + err.message + '</p>';
+        }
+      }
+    }
+
+    function loadSeminars(userId) {
+      log('Calling GAS getActiveSeminars...');
+      google.script.run
+        .withSuccessHandler(seminars => {
+          log('GAS返却: ' + JSON.stringify(seminars).substring(0, 200));
+          renderList(seminars, userId);
+        })
+        .withFailureHandler(err => {
+          log('GAS Error: ' + err.message);
+          document.getElementById('app').innerHTML = '<p>データ取得失敗: ' + err.message + '</p>';
+        })
+        .getActiveSeminars();
+    }
+
+    function renderList(seminars, userId) {
+      const app = document.getElementById('app');
+      if (!seminars || seminars.length === 0) {
+        app.innerHTML = '<p>現在募集中のセミナーはありません。</p>';
+        return;
+      }
+      let html = '';
+      seminars.forEach(s => {
+        const applyUrl = FORM_BASE_URL + '?' + ENTRY_SEMINAR + '=' + encodeURIComponent(s.pid) + '&' + ENTRY_USER + '=' + encodeURIComponent(userId);
+        let btnHtml = '';
+        if (s.status === '募集中') {
+          btnHtml = '<button class="btn" onclick="window.location.href=\'' + applyUrl + '\'">申し込む</button>';
+        } else if (s.status === '満席') {
+          btnHtml = '<button class="btn disabled" disabled>満席</button>';
+        } else if (s.status === '申込前') {
+          btnHtml = '<button class="btn disabled" disabled>申込開始前</button>';
+        }
+        html += '<div class="card">' +
+          '<div class="date">' + s.date + ' <span style="font-size:0.8em;color:#666;">(' + s.status + ')</span></div>' +
+          '<h2>' + s.name + '</h2>' +
+          '<div class="info">場所: ' + s.venue + '<br>時間: ' + s.time + '<br>' +
+          (s.comment ? '<span style="font-size:0.9em;color:#888;">' + s.comment + '</span>' : '') +
+          '</div>' + btnHtml + '</div>';
+      });
+      app.innerHTML = html;
+    }
+
+    main();
+  </script>
+</body>
+</html>
+変更点
+liff.init() に10秒タイムアウト追加 → ハングを検出できる
+window.location.origin をログ出力 → 実際のドメインを確認
+liff.isInClient() / liff.getOS() を出力 → LINE内ブラウザか外部ブラウザか判別
+タイムスタンプ付きログ → 何秒で止まっているか可視化
+次のステップ
+この修正版で再デプロイして、LINEアプリ内で開いたらデバッグログの全文をスクショして見せてください。
+
+予想される結果と対処:
+
+ログ内容	意味	対処
+TIMEOUT after 10000ms + Origin が googleusercontent.com	GASドメイン問題 確定	別ホスティングに移すか回避策を実装
+liff.init SUCCESS → GAS Error	LIFF は動いた。マスタシートの問題	シート側を調査
+liff.init SUCCESS → セミナー表示	🎉 解決	—
+ログの結果次第で次の手を打ちます。
+
+ReferenceError: FORM_BASE_URL is not defined（行 93）と出力される
+
+11:31
+
+未定義変数の原因を特定し、解決策を検討した。
+
+
+すみません、テンプレート変数に渡していないのに <?= FORM_BASE_URL ?> を書いてしまいました。
+
+その1行だけ修正してください。
+
+javascript
+// ❌ これを
+const FORM_BASE_URL = '<?= FORM_BASE_URL || "https://docs.google.com/forms/d/e/..." ?>';
+
+// ✅ こう直す（直接書く）
+const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdvMlF-nnf3qgebUwI4JrcnKddfQgyww16uT2qmM9MxgOb4sg/viewform';
+修正したら再デプロイ（新しいバージョン）して、もう一度LINEから開いてデバッグログを見せてください。
+
+
+<!DOCTYPE html> <html> <head> <base target="_top"> <meta charset="utf-8"> <title>セミナー一覧</title> <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script> <style> body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+pasted
+
+
+/** * PCM Seminar Auto Reply System v2 */ // ========================================== // CONFIG // ========================================== const CONFIG = { MASTER_SHEET_ID: '1Br3QD9KGm_Ws499Tu2Nn5PpEWrS0Twmpv8RnD5kSxTo', // Adjust if needed MASTER_SHEET_NAME: 'Master',
+
+pasted
+
+現状のコードを共有するね。これであってる？全体再検討して
+
+11:40
+
+GAS と LIFF の構造的問題を診断し、解決策を検討した。
+1m、30s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+コード自体はあっています。問題はコードのバグではなく、GAS HtmlService と LIFF SDK の構造的な非互換です。
+
+根本原因
+LIFF Endpoint URL:  script.google.com/macros/s/.../exec
+          ↓ GASが内部リダイレクト
+実際の表示ドメイン: xxxxxxxx.googleusercontent.com（サンドボックス）
+LIFF SDK は「今いるページのドメイン」と「登録された Endpoint URL のドメイン」を照合します。GAS はページを googleusercontent.com で表示するため、ドメイン不一致で liff.init() が永久にハングするのです。これは GAS の仕様なのでコードでは回避できません。
+
+解決策: フロントを分離する
+GASはデータAPI専用にして、HTMLは別の場所にホスティングします。
+
+【現在】
+LINE → LIFF → GAS(HTML+API一体) ← ここが壊れている
+
+【修正後】
+LINE → LIFF → GitHub Pages (index.html)  ← LIFFが正常動作
+                    ↓ fetch()
+               GAS Web API (JSON返却)
+                    ↓
+               Master Sheet
+変更は2ファイルだけです。
+
+
+4ステップ
+
+Presented 2 files
+
+コードを検証し、展開手順を明確化した。
+
+変更した箇所
+Code.gs: doGet() を HTML返却 → JSON返却 に変更。それ以外は一切変更なし。
+
+index.html: google.script.run → fetch(GAS_API_URL) に変更。LIFF_ID を直接記述（GASテンプレート <?= ?> を使わない）。XSSエスケープ関数 esc() も追加済み。
+
+デプロイ手順
+Step 1: GAS側を更新
+GAS エディタで Code.gs を差し替え
+GAS内の index.html は削除してOK（もう使わないため）
+「デプロイ」→「デプロイを管理」→「編集」→ 新しいバージョン → 保存
+Step 2: GitHub Pages にフロントを置く
+GitHub にアクセス → 新しいリポジトリ作成（例: pcm-seminar-liff）
+index.html をアップロード
+Settings → Pages → Branch: main → Save
+1〜2分後に https://あなたのユーザー名.github.io/pcm-seminar-liff/ で公開される
+Step 3: index.html 内の URL を確認
+javascript
+// ★ GAS_API_URL はデプロイ後の /exec URL に合わせる
+const GAS_API_URL = 'https://script.google.com/macros/s/xxxxx/exec';
+```
+
+再デプロイで URL が変わった場合は index.html も更新してください。
+
+### Step 4: LINE Developers の Endpoint URL を変更
+```
+旧: https://script.google.com/macros/s/.../exec
+新: https://あなたのユーザー名.github.io/pcm-seminar-liff/
+これで何が解決するか
+問題	原因	解決
+liff.init() がハング	GASが googleusercontent.com で表示	GitHub Pages は自分のドメインで表示
+別アカウントで開けない	GASの /dev or 権限	GitHub Pages は誰でもアクセス可能
+LINEアプリから LIFF URL を開いてデバッグログを確認してください。liff.init SUCCESS が出れば突破です。
+
+Index
+コード · HTML 
+Code
+GS 
+image
+再検討の方法は一度保留。
+送信したコードでは
+こうなる
+
+11:46
+
+診断結果を確認し、根本的な解決策を指摘した。
+
+
+
+
+
+想定通りの結果です。Origin が googleusercontent.com → GAS にホスティングしている限り絶対に解決しません。
+
+今まだ GAS の URL を LIFF Endpoint に指定しているので、このスクショの状態は正常（＝予想通り）です。
+
+やるべきこと：index.html を GitHub Pages に置く
+GitHub アカウントはありますか？
+
+ある場合 → 以下の手順で5分で完了します。
+
+ない場合 → 代わりに Netlify Drop（アカウント不要）で30秒でできます。https://app.netlify.com/drop に index.html をドラッグ&ドロップするだけです。
+
+GitHub Pages の場合（手順）
+https://github.com/new でリポジトリ作成（名前: pcm-liff、Public）
+「Add file」→「Upload files」→ さっきの index.html をアップロード
+Settings → Pages → Branch: main → フォルダ: / (root) → Save
+1〜2分待つと URL が発行される：https://あなたのID.github.io/pcm-liff/
+Netlify Drop の場合（最速）
+https://app.netlify.com/drop を開く
+index.html が入ったフォルダをドラッグ&ドロップ
+即座に URL が発行される（例: https://random-name-12345.netlify.app）
+最後に LINE Developers で Endpoint URL を変更
+旧: https://script.google.com/macros/s/.../exec
+新: https://あなたのID.github.io/pcm-liff/   ← GitHub Pages の URL
+これで liff.init が通るようになります。どちらの方法で進めるか教えてください（もしくは他に使い慣れたホスティングがあればそれでもOKです）。
+
+
+
+登録したことないから
+
+
+Claude は AI のため、誤りを含む可能性があります。回答内容は必ずご確認ください。
+Index · HTML
+コピー
+
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>セミナー一覧</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+
+    #debug {
+      background: rgba(0, 0, 0, 0.85);
+      color: #0f0;
+      font-size: 11px;
+      padding: 10px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 180px;
+      overflow-y: scroll;
+      z-index: 9999;
+      /* ★本番リリース時は display: none にする */
+      display: block;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .card h2 {
+      font-size: 18px;
+      margin-top: 0;
+      color: #2c3e50;
+    }
+
+    .date {
+      color: #e67e22;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .info {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #666;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background-color: #06c755;
+      color: white;
+      padding: 12px 0;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+      margin-top: 15px;
+      cursor: pointer;
+      border: none;
+      font-size: 16px;
+    }
+
+    .btn.disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn:active {
+      background-color: #05b34c;
+    }
+
+    .loading {
+      text-align: center;
+      margin-top: 50px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div class="loading">読み込み中...</div>
+  </div>
+  <div id="debug">Debug Log:</div>
+
+  <script>
+    // ==========================================
+    // ★ この3つだけ書き換える
+    // ==========================================
+    const LIFF_ID = '2009018264-Dw2kv4L9';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyUjqY83pRshVoWoRJsCTWG8S1oiFLqzxqRZ69NoADNqkl1qnkf8iYyqT80OKskWA0IwA/exec';
+    const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdvMlF-nnf3qgebUwI4JrcnKddfQgyww16uT2qmM9MxgOb4sg/viewform';
+    // ==========================================
+
+    const ENTRY_SEMINAR = 'entry.100643207';
+    const ENTRY_USER = 'entry.1734163930';
+
+    function log(msg) {
+      console.log(msg);
+      const d = document.getElementById('debug');
+      if (d) d.innerHTML += '\n[' + new Date().toLocaleTimeString() + '] ' + msg;
+    }
+
+    function withTimeout(promise, ms) {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT after ' + ms + 'ms')), ms))
+      ]);
+    }
+
+    // ==========================================
+    // Main
+    // ==========================================
+    async function main() {
+      try {
+        log('=== main start ===');
+        log('URL: ' + window.location.href);
+        log('Origin: ' + window.location.origin);
+        log('LIFF ID: ' + LIFF_ID);
+
+        // 1. LIFF 初期化
+        log('Calling liff.init...');
+        await withTimeout(liff.init({ liffId: LIFF_ID }), 10000);
+        log('liff.init SUCCESS');
+
+        log('isLoggedIn: ' + liff.isLoggedIn());
+        log('isInClient: ' + liff.isInClient());
+        log('OS: ' + liff.getOS());
+
+        // 2. ログインチェック
+        if (!liff.isLoggedIn()) {
+          log('Not logged in');
+          document.getElementById('app').innerHTML =
+            '<div style="text-align:center; padding:20px;">' +
+            '<p>LINEログインが必要です</p>' +
+            '<button class="btn" onclick="liff.login()">LINEでログイン</button>' +
+            '</div>';
+          return;
+        }
+
+        // 3. プロフィール取得
+        const profile = await liff.getProfile();
+        const userId = profile.userId;
+        log('UserID: ' + userId);
+        log('Name: ' + profile.displayName);
+
+        // 4. セミナー一覧取得
+        loadSeminars(userId);
+
+      } catch (err) {
+        log('ERROR: ' + err.message);
+        if (err.message.includes('TIMEOUT')) {
+          document.getElementById('app').innerHTML =
+            '<p>LIFF初期化がタイムアウトしました。</p>' +
+            '<p style="font-size:12px;color:#999;">LINEアプリ内で開いてください。</p>';
+        } else {
+          document.getElementById('app').innerHTML = '<p>エラー: ' + err.message + '</p>';
+        }
+      }
+    }
+
+    // ==========================================
+    // ★ 変更点: google.script.run → fetch()
+    // ==========================================
+    async function loadSeminars(userId) {
+      log('Fetching seminars from GAS API...');
+      try {
+        const res = await fetch(GAS_API_URL + '?action=getSeminars');
+        log('HTTP Status: ' + res.status);
+
+        const seminars = await res.json();
+        log('Received: ' + seminars.length + ' items');
+        log('Data: ' + JSON.stringify(seminars).substring(0, 200));
+
+        renderList(seminars, userId);
+
+      } catch (err) {
+        log('Fetch Error: ' + err.message);
+        document.getElementById('app').innerHTML = '<p>データ取得失敗: ' + err.message + '</p>';
+      }
+    }
+
+    // ==========================================
+    // Render (変更なし)
+    // ==========================================
+    function esc(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    function renderList(seminars, userId) {
+      const app = document.getElementById('app');
+      if (!seminars || seminars.length === 0) {
+        app.innerHTML = '<p>現在募集中のセミナーはありません。</p>';
+        return;
+      }
+
+      let html = '';
+      seminars.forEach(s => {
+        const applyUrl = FORM_BASE_URL +
+          '?' + ENTRY_SEMINAR + '=' + encodeURIComponent(s.pid) +
+          '&' + ENTRY_USER + '=' + encodeURIComponent(userId);
+
+        let btnHtml = '';
+        if (s.status === '募集中') {
+          btnHtml = '<button class="btn" onclick="window.location.href=\'' + applyUrl + '\'">申し込む</button>';
+        } else if (s.status === '満席') {
+          btnHtml = '<button class="btn disabled" disabled>満席</button>';
+        } else if (s.status === '申込前') {
+          btnHtml = '<button class="btn disabled" disabled>申込開始前</button>';
+        }
+
+        html += '<div class="card">' +
+          '<div class="date">' + esc(s.date) + ' <span style="font-size:0.8em;color:#666;">(' + esc(s.status) + ')</span></div>' +
+          '<h2>' + esc(s.name) + '</h2>' +
+          '<div class="info">' +
+          '場所: ' + esc(s.venue) + '<br>' +
+          '時間: ' + esc(s.time) + '<br>' +
+          (s.comment ? '<span style="font-size:0.9em;color:#888;">' + esc(s.comment) + '</span>' : '') +
+          '</div>' +
+          btnHtml +
+          '</div>';
+      });
+      app.innerHTML = html;
+    }
+
+    // Start
+    main();
+  </script>
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
