@@ -97,8 +97,6 @@
 
   <script>
     // ==========================================
-    // ★ この3つだけ書き換える
-    // ==========================================
     const LIFF_ID = '2009018264-Dw2kv4L9';
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyUjqY83pRshVoWoRJsCTWG8S1oiFLqzxqRZ69NoADNqkl1qnkf8iYyqT80OKskWA0IwA/exec';
     const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdvMlF-nnf3qgebUwI4JrcnKddfQgyww16uT2qmM9MxgOb4sg/viewform';
@@ -229,6 +227,7 @@
           '<div class="info">' +
           '場所: ' + esc(s.venue) + '<br>' +
           '時間: ' + esc(s.time) + '<br>' +
+          '費用: 初受講 ¥' + Number(s.fee_new).toLocaleString() + ' / 再受講 ¥' + Number(s.fee_repeat).toLocaleString() + '<br>' +
           (s.comment ? '<span style="font-size:0.9em;color:#888;">' + esc(s.comment) + '</span>' : '') +
           '</div>' +
           btnHtml +
