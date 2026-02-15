@@ -265,12 +265,11 @@
 
     /* Price Section */
     .price-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
       background: rgba(255, 255, 255, 0.6);
       border: 1px solid rgba(0, 0, 0, 0.05);
-      /* Proper border */
       border-radius: 8px;
       padding: 10px 14px;
       margin-bottom: 20px;
@@ -281,9 +280,14 @@
     .price-item {
       display: flex;
       flex-direction: column;
+      align-items: center;
       font-size: 11px;
       color: #666;
     }
+
+    /* Center the first and last items differently */
+    .price-item:first-child { align-items: flex-start; }
+    .price-item:last-child { align-items: flex-end; }
 
     .price-val {
       font-size: 14px;
@@ -353,6 +357,16 @@
   <div id="debug">Debug Log:</div>
 
   <script>
+    // ==========================================
+    // ... (Constants & Init) ... (No changes here, skipping for brevity in replacement if not modifying logic)
+    // Note: Since replace_file_content replaces a block, I need to be careful.
+    // I will target the CSS and Body content specifically or easier sections.
+    // Actually, I should split this into CSS replacement and JS replacement for safety.
+    // But since I'm rewriting a big chunk, let's target the CSS first.
+    
+    // WAIT, I cannot put comments in replacement content easily if I don't match exactly.
+    // I will replace the CSS block first.
+  </script>
     // ==========================================
     const LIFF_ID = '2009026233-a9Vi8lsj';
     const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbyUjqY83pRshVoWoRJsCTWG8S1oiFLqzxqRZ69NoADNqkl1qnkf8iYyqT80OKskWA0IwA/exec';
@@ -514,9 +528,13 @@
                    <span>初受講</span>
                    <span class="price-val">¥${Number(s.fee_new).toLocaleString()}</span>
                  </div>
-                 <div class="price-item" style="text-align:right;">
+                 <div class="price-item">
                    <span>再受講</span>
                    <span class="price-val">¥${Number(s.fee_repeat).toLocaleString()}</span>
+                 </div>
+                 <div class="price-item">
+                   <span>懇親会</span>
+                   <span class="price-val">¥${Number(s.fee_party || 0).toLocaleString()}</span>
                  </div>
               </div>
 
