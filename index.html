@@ -645,21 +645,28 @@
         const s = profileData.nearestSeminar;
         html += `
             <div class="vip-card">
-               <div class="vip-label">過去受講者 限定</div>
-               <h2>ワンクリック再受講</h2>
+               <div class="vip-label">東大阪PCM過去受講者 限定</div>
+               <h2>ワンタップ再受講</h2>
                <p>過去の受講記録から、直近のセミナーに即座に予約を確定します。<br><span style="color: #ffd700; font-size: 11.5px; opacity: 0.9;">※こちらは「懇親会つき」の専用プレミアム申込枠です。</span></p>
                
-               <div class="vip-info-grid">
-                  <div class="vip-info-label">対象日程</div>
-                  <div>${esc(s.date)} ${esc(s.time)}</div>
-                  <div class="vip-info-label">場所</div>
-                  <div>${esc(s.venue)}</div>
+               <div class="info-grid" style="text-align: left; background: rgba(0,0,0,0.5); padding: 14px; border-radius: 8px; margin-bottom: 24px; border: 1px solid rgba(255,255,255,0.1); position: relative; z-index: 2; color: #fff;">
+                 <div class="info-label" style="color: #aaa;">対象日程</div>
+                 <div style="font-weight: bold; color: #ff9a9e; font-size: 15px;">${esc(s.date)} ${esc(s.time)}</div>
+                 <div class="info-label" style="color: #aaa;">場所</div>
+                 <div>${esc(s.venue)}</div>
+                 <div class="info-label" style="color: #aaa;">プラン</div>
+                 <div>再受講 ＋ 懇親会</div>
+                 <div class="info-label" style="color: #aaa;">合計金額</div>
+                 <div style="font-weight: 900; color: #ffd700; font-size: 17px; text-shadow: 0 0 5px rgba(255,215,0,0.5);">¥${Number((s.fee_repeat || 0) + (s.fee_party || 0)).toLocaleString()}</div>
                </div>
 
                <button class="btn-vip" onclick="doDirectBooking('${esc(userId)}', '${esc(s.pid)}')">
-                  🔥 今すぐ申込む（¥${Number((s.fee_repeat || 0) + (s.fee_party || 0)).toLocaleString()}）
+                  🔥 ${esc(s.date.replace(/^[0-9]+年/, ''))} 懇親会つきで再受講する
                </button>
             </div>
+            
+            <hr style="border: 0; height: 1px; background: rgba(0,0,0,0.1); margin: 30px 0;">
+            <div style="text-align:center; color: #666; font-size: 13px; margin-bottom: 20px;">その他の日程・「懇親会なし」をご希望の方はこちら</div>
           `;
       }
 
