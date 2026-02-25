@@ -505,23 +505,24 @@
     const FORM_BASE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdvMlF-nnf3qgebUwI4JrcnKddfQgyww16uT2qmM9MxgOb4sg/viewform';
     // ==========================================
 
-    const ENTRY_SEMINAR = 'entry.1839423744'; // SeminarID
-    const ENTRY_USER = 'entry.497680270'; // UserID
+    const ENTRY_SEMINAR = 'entry.100643207'; // SeminarID
+    const ENTRY_USER = 'entry.1734163930'; // UserID
 
-    // 事前入力用 Google Form IDs
-    const ENTRY_COMPANY = 'entry.1017615439'; // 御社名（団体名）※任意
-    const ENTRY_LAST_NAME = 'entry.1118676934'; // 苗字
-    const ENTRY_FIRST_NAME = 'entry.1200424826'; // 名前
-    const ENTRY_LAST_NAME_EN = 'entry.753892306'; // 苗字（アルファベット）
-    const ENTRY_FIRST_NAME_EN = 'entry.745605535'; // 名前 （アルファベット）
-    const ENTRY_SEX = 'entry.347988995'; // 性別
-    // const ENTRY_BIRTH = 'entry.634102727'; // 生年月日 (日付要素なので分解が必要な場合あり)
-    const ENTRY_ZIP = 'entry.1856051739'; // 郵便番号
-    const ENTRY_PREF = 'entry.1097940555'; // 都道府県
-    const ENTRY_CITY = 'entry.568002438'; // 市区町村
-    const ENTRY_ADDR1 = 'entry.1709916616'; // 番地
-    const ENTRY_ADDR2 = 'entry.1679908514'; // 建物名
-    const ENTRY_PHONE = 'entry.1553635560'; // 連絡先電話
+    // 事前入力用 Google Form Entry IDs
+    // ※ Question IDではなくEntry ID（data-paramsの内側のID）を使用すること
+    const ENTRY_COMPANY = 'entry.512004671'; // 御社名（団体名）※任意
+    const ENTRY_LAST_NAME = 'entry.1228820142'; // 苗字
+    const ENTRY_FIRST_NAME = 'entry.1311373621'; // 名前
+    const ENTRY_LAST_NAME_EN = 'entry.1991006458'; // 苗字（アルファベット）
+    const ENTRY_FIRST_NAME_EN = 'entry.884066588'; // 名前 （アルファベット）
+    const ENTRY_SEX = 'entry.1440227199'; // 性別
+    // const ENTRY_BIRTH = 'entry.775334417'; // 生年月日 (日付要素なので分解が必要な場合あり)
+    const ENTRY_ZIP = 'entry.1107386333'; // 郵便番号
+    const ENTRY_PREF = 'entry.16340754'; // 都道府県
+    const ENTRY_CITY = 'entry.20812020'; // 市区町村
+    const ENTRY_ADDR1 = 'entry.517546570'; // 番地
+    const ENTRY_ADDR2 = 'entry.1191090335'; // 建物名
+    const ENTRY_PHONE = 'entry.1066659949'; // 連絡先電話
 
     // メールアドレスは設定で「入力を求める」となっている専用フィールドのため entry.XXX ではありません
     const ENTRY_EMAIL = 'emailAddress';
@@ -711,7 +712,8 @@
         // Button Logic
         let btnHtml = '';
         if (s.status === '募集中') {
-          btnHtml = `<button class="btn" onclick="window.location.href='${applyUrl}'">申し込む</button>`;
+          const btnLabel = s.is_repeat_only ? '再受講を申し込む' : '申し込む';
+          btnHtml = `<button class="btn" onclick="window.location.href='${applyUrl}'">${btnLabel}</button>`;
         } else if (s.status === '満席') {
           btnHtml = `<button class="btn disabled" disabled>満席</button>`;
         } else if (s.status === '申込前') {
@@ -729,6 +731,12 @@
                 <div>${esc(s.venue)}</div>
                 <div class="info-label">時間</div>
                 <div>${esc(s.time)}</div>
+                <div class="info-label">申込期限</div>
+                <div>${esc(s.application_deadline || '-')}</div>
+                <div class="info-label">新規振込期限</div>
+                <div>${esc(s.payment_deadline || '-')}</div>
+                <div class="info-label">PPI申込期限</div>
+                <div>${esc(s.ppi_deadline || '-')}</div>
               </div>
 
               ${s.comment ? `<div class="comment-box">💡 ${esc(s.comment)}</div>` : ''}
